@@ -47,11 +47,6 @@ services:
       resources:
         limits:
           memory: 512M
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8080" ]
-      interval: 5s
-      timeout: 3s
-      retries: 3
     volumes:
       - ./data/spark-data:/opt/spark/data
       - ./data/spark-apps:/opt/spark/apps
