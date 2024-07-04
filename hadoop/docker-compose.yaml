@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  hadoop-master:
+    image: hadoop-image
+    build: .
+    entrypoint: ["./entrypoint.sh", "master"]
+    hostname: localhost
+    ports:
+      - 8080:9870
+      - 8088:8088
+    depends_on:
+      - hadoop-worker
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+    environment:
+      - HDFS_REPLICATION_FACTOR=2
+      - HDFS_WORKER_PREFIX=hadoop-hadoop-worker-
+      - HDFS_WORKER_COUNT=3
+      - HDFS_START_YARN=true
+    volumes:
+      - ./config:/root/config
+
+  hadoop-worker:
+    image: hadoop-image
+    entrypoint: ["./entrypoint.sh", "worker"]
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+    environment:
+      - HDFS_REPLICATION_FACTOR=2
+      - HDFS_WORKER_PREFIX=hadoop-hadoop-worker-
+      - HDFS_WORKER_COUNT=3
+    volumes:
+      - ./config:/root/config

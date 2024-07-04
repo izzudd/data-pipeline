@@ -1,0 +1,6 @@
+PREFIX=$HDFS_WORKER_PREFIX
+WORKER_COUNT=$HDFS_WORKER_COUNT
+
+for (( c=1; c<=WORKER_COUNT; c++ )); do
+  echo "${PREFIX}${c}"
+done

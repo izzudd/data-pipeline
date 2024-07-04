@@ -1,48 +1,56 @@
 version: '3.8'
 
-services:
-  # warehouse
-  db:
-    image: postgres:alpine
-    shm_size: 128M
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-    volumes:
-      - ./data/postgres-data:/var/lib/postgresql/data
-  
-  adminer:
-    image: adminer:latest
-    depends_on:
-      - db
-    ports:
-      - 8080:8080
+name: de
 
+services:
   # lake
-  minio:
-    image: quay.io/minio/minio
-    environment:
-      MINIO_ROOT_USER: user
-      MINIO_ROOT_PASSWORD: password
+  hadoop-master:
+    build: ./hadoop
+    image: hadoop-image
+    entrypoint: ["./entrypoint.sh", "master"]
+    hostname: hadoop-master
+    ports:
+      - 8080:9870
+      - 8088:8088
+    depends_on:
+      - hadoop-worker
     deploy:
       resources:
         limits:
+          cpus: '0.5'
           memory: 512M
-    ports:
-      - 8081:9001
+    environment:
+      - HDFS_REPLICATION_FACTOR=2
+      - HDFS_WORKER_PREFIX=de-hadoop-worker-
+      - HDFS_WORKER_COUNT=3
+      - HDFS_START_YARN=false
     volumes:
-      - ./data/minio-data:/data
-    command: server /data --console-address ":9001"
+      - ./hadoop/config:/root/config
+
+  hadoop-worker:
+    image: hadoop-image
+    entrypoint: ["./entrypoint.sh", "worker"]
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    environment:
+      - HDFS_REPLICATION_FACTOR=2
+      - HDFS_WORKER_PREFIX=de-hadoop-worker-
+      - HDFS_WORKER_COUNT=3
+    volumes:
+      - ./hadoop/config:/root/config
 
   # worker
   spark-master:
-    build: .
+    build: ./spark
     image: spark-image
     entrypoint: ['./entrypoint.sh', 'master']
+    hostname: spark-master
+    depends_on:
+      - hadoop-master
     deploy:
       resources:
         limits:
@@ -51,25 +59,12 @@ services:
       - ./data/spark-data:/opt/spark/data
       - ./data/spark-apps:/opt/spark/apps
       - ./data/spark-logs:/opt/spark/spark-events
-      - ./conf:/opt/spark/conf
-    env_file:
-      - .env.spark
+      - ./spark/config:/opt/spark/conf
+    environment:
+      - SPARK_NO_DAEMONIZE=true
     ports:
-      - '8082:8080'
+      - '8081:8080'
       - '7077:7077'
-
-  # spark-history-server:
-  #   image: spark-image
-  #   entrypoint: ['./entrypoint.sh', 'history']
-  #   depends_on:
-  #     - spark-master
-  #   env_file:
-  #     - .env.spark
-  #   volumes:
-  #     - ./data/spark-logs:/opt/spark/spark-events
-  #     - ./data/conf:/opt/spark/conf
-  #   ports:
-  #     - '18080:18080'
 
   spark-worker:
     image: spark-image
@@ -82,10 +77,31 @@ services:
         limits:
           cpus: '0.5'
           memory: 1G
-    env_file:
-      - .env.spark
+    environment:
+      - SPARK_NO_DAEMONIZE=true
     volumes:
       - ./data/spark-data:/opt/spark/data
       - ./data/spark-apps:/opt/spark/apps
       - ./data/spark-logs:/opt/spark/spark-events
-      - ./conf:/opt/spark/conf
+      - ./spark/config:/opt/spark/conf
+
+  # warehouse
+  # db:
+  #   image: postgres:alpine
+  #   shm_size: 128M
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 512M
+  #   environment:
+  #     POSTGRES_USER: user
+  #     POSTGRES_PASSWORD: password
+  #   volumes:
+  #     - ./data/postgres-data:/var/lib/postgresql/data
+  
+  # adminer:
+  #   image: adminer:latest
+  #   depends_on:
+  #     - db
+  #   ports:
+  #     - 8080:8080
