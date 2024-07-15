@@ -1,5 +1,8 @@
 #!/bin/bash
 
+echo "Starting ssh"
+/etc/init.d/ssh start
+
 SPARK_WORKLOAD=$1
 
 echo "SPARK_WORKLOAD: $SPARK_WORKLOAD"

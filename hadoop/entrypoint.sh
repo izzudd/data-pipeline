@@ -1,5 +1,6 @@
 #!/bin/bash
 
+echo "Starting ssh"
 /etc/init.d/ssh start
 
 TYPE=$1
@@ -28,7 +29,7 @@ if [ "$TYPE" = "master" ]; then
   start-dfs.sh
   hdfs dfs -mkdir -p /user/root   # default directory for root user
   hdfs dfs -chmod 0777 / # not secure, but ok for demo
-s
+
   if [ "$HDFS_START_YARN" = "true" ]; then
     echo "Starting yarn"
     start-yarn.sh

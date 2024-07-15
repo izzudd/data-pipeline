@@ -8,6 +8,7 @@ RUN apt-get update \
     sudo \
     openssh-server \
     python3 \
+    python3-pip \
     ssh \
     pdsh \
     curl \
@@ -16,18 +17,17 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 # Setup ssh
-RUN /etc/init.d/ssh start
 RUN echo "export PDSH_RCMD_TYPE=ssh" > ~/.bashrc \
   && ssh-keygen -t rsa -P "" -f ~/.ssh/id_rsa \
   && cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
 
 # Download hadoop
-RUN curl https://dlcdn.apache.org/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz -o hadoop.tar.gz
+ENV HADOOP_HOME="/root/hadoop"
+RUN curl https://dlcdn.apache.org/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz -o hadoop.tar.gz \
+  && mkdir $HADOOP_HOME && tar xzf hadoop.tar.gz --directory $HADOOP_HOME --strip-components 1 \
+  && rm -f hadoop.tar.gz
 
 # Setup hadoop
-ENV HADOOP_HOME="/root/hadoop"
-RUN mkdir $HADOOP_HOME && tar xzf hadoop.tar.gz --directory $HADOOP_HOME --strip-components 1 \
-  && rm -f hadoop.tar.gz
 
 ENV JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
 ENV PATH="${HADOOP_HOME}/bin:${PATH}"
@@ -48,8 +48,8 @@ RUN echo "export JAVA_HOME=${JAVA_HOME}" >> $HADOOP_HOME/etc/hadoop/hadoop-env.s
   && mkdir -p ${HADOOP_HOME}/data && chmod 700 ${HADOOP_HOME}/data
   
 WORKDIR /root
-COPY example ./example
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
+COPY app ./app
 
 ENTRYPOINT ["./entrypoint.sh"]

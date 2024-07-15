@@ -6,39 +6,28 @@ ARG SPARK_VERSION=3.5.1
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     sudo \
+    openssh-server \
     curl \
     vim \
     unzip \
     rsync \
     openjdk-11-jdk \
-    build-essential \
-    software-properties-common \
     ssh \
     python3 \
+    python3-pip \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
 
-
 # Setup the directories for our Spark and Hadoop installations
 ENV SPARK_HOME=${SPARK_HOME:-"/opt/spark"}
-ENV HADOOP_HOME=${HADOOP_HOME:-"/opt/hadoop"}
 
-RUN mkdir -p ${HADOOP_HOME} && mkdir -p ${SPARK_HOME}
+RUN mkdir -p ${SPARK_HOME}
 WORKDIR ${SPARK_HOME}
 
 # Download and install Spark
 RUN curl https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop3.tgz -o spark-${SPARK_VERSION}-bin-hadoop3.tgz \
  && tar xvzf spark-${SPARK_VERSION}-bin-hadoop3.tgz --directory /opt/spark --strip-components 1 \
  && rm -rf spark-${SPARK_VERSION}-bin-hadoop3.tgz
-
-FROM spark-base as pyspark
-
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends \
-    python3-pip \
-    python3 \
-  && apt-get clean \
-  && rm -rf /var/lib/apt/lists/*
 
 # Install python deps
 COPY requirements.txt .
@@ -50,15 +39,13 @@ ENV SPARK_MASTER_HOST spark-master
 ENV SPARK_MASTER_PORT 7077
 ENV PYSPARK_PYTHON python3
 
-# Copy the default configurations into $SPARK_HOME/conf
-# COPY spark-defaults.conf "$SPARK_HOME/conf"
-
 RUN chmod u+x /opt/spark/sbin/* && \
     chmod u+x /opt/spark/bin/*
 
 ENV PYTHONPATH=$SPARK_HOME/python/:$PYTHONPATH
 
-# Copy appropriate entrypoint script
+WORKDIR /root
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
+
 ENTRYPOINT ["./entrypoint.sh"]
