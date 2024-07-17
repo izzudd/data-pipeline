@@ -38,11 +38,11 @@ ENV PATH="/opt/spark/sbin:/opt/spark/bin:${PATH}"
 ENV SPARK_MASTER_HOST spark-master
 ENV SPARK_MASTER_PORT 7077
 ENV PYSPARK_PYTHON python3
-
-RUN chmod u+x /opt/spark/sbin/* && \
-    chmod u+x /opt/spark/bin/*
-
 ENV PYTHONPATH=$SPARK_HOME/python/:$PYTHONPATH
+
+RUN chmod u+x /opt/spark/sbin/* \
+  && chmod u+x /opt/spark/bin/* \
+  && mkdir -p /opt/spark/spark-events
 
 WORKDIR /root
 COPY entrypoint.sh .

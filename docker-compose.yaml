@@ -3,15 +3,32 @@ version: '3.8'
 name: de
 
 services:
+  # notebook
+  # zeppelin:
+  #   image: apache/zeppelin:0.11.1
+  #   container_name: zeppelin
+  #   depends_on:
+  #     - hadoop-master
+  #     - spark-master
+  #   ports:
+  #     - 8080:8080
+  #   environment:
+  #     - "SPARK_MASTER=spark://spark-master:7077"
+  #     - "SPARK_HOME=/zeppelin/spark"
+  #   volumes:
+  #     - ./data/zeppelin/notebook:/notebook
+  #     - ./data/zeppelin/conf:/zeppelin/conf
+  #     - ./data/spark:/zeppelin/spark
+
   # lake
   hadoop-master:
     build: ./hadoop
-    image: hadoop-image
+    image:  hadoop-image
     container_name: hadoop-master
     entrypoint: ["./entrypoint.sh", "master"]
     hostname: hadoop-master
     ports:
-      - 8080:9870
+      - 8081:9870
       - 8088:8088
       # - 2002:22
     depends_on:
@@ -20,7 +37,7 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 1G
+          memory: 512M
     environment:
       - HDFS_REPLICATION_FACTOR=${HDFS_REPLICATION:-1}
       - HDFS_WORKER_PREFIX=de-hadoop-worker-
@@ -38,8 +55,8 @@ services:
       replicas: 3
       resources:
         limits:
-          cpus: '2'
-          memory: 1G
+          cpus: '0.5'
+          memory: 512M
     environment:
       - HDFS_REPLICATION_FACTOR=${HDFS_REPLICATION:-1}
       - HDFS_WORKER_PREFIX=de-hadoop-worker-
@@ -48,50 +65,46 @@ services:
       - ./hadoop/config:/root/config:ro
 
   # worker
-  # spark-master:
-  #   build: ./spark
-  #   image: spark-image
-  #   container_name: spark-master
-  #   entrypoint: ['./entrypoint.sh', 'master']
-  #   hostname: spark-master
-  #   depends_on:
-  #     - hadoop-master
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: '0.5'
-  #         memory: 512M
-  #   volumes:
-  #     - ./data/spark-data:/opt/spark/data
-  #     - ./data/spark-apps:/opt/spark/apps
-  #     - ./data/spark-logs:/opt/spark/spark-events
-  #     - ./spark/config:/opt/spark/conf:ro
-  #     - ./spark/app:/root/app:ro
-  #   environment:
-  #     - SPARK_NO_DAEMONIZE=true
-  #   ports:
-  #     - 8081:8080
-  #     - 7077:7077
-  #     # - 2001:22
+  spark-master:
+    build: ./spark
+    image: spark-image
+    container_name: spark-master
+    entrypoint: ['./entrypoint.sh', 'master']
+    hostname: spark-master
+    depends_on:
+      - hadoop-master
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+    volumes:
+      # - ./data/spark:/opt/spark
+      - ./spark/config:/opt/spark/conf:ro
+      - ./spark/app:/root/app:ro
+    environment:
+      - SPARK_NO_DAEMONIZE=true
+    ports:
+      - 8082:8080
+      - 7077:7077
+      - 4040-4050:4040-4050
+      # - 2001:22
 
-  # spark-worker:
-  #   image: spark-image
-  #   entrypoint: ['./entrypoint.sh', 'worker']
-  #   depends_on:
-  #     - spark-master
-  #   deploy:
-  #     replicas: ${SPARK_WORKER_COUNT:-1}
-  #     resources:
-  #       limits:
-  #         cpus: '2'
-  #         memory: 1G
-  #   environment:
-  #     - SPARK_NO_DAEMONIZE=true
-  #   volumes:
-  #     - ./data/spark-data:/opt/spark/data
-  #     - ./data/spark-apps:/opt/spark/apps
-  #     - ./data/spark-logs:/opt/spark/spark-events
-  #     - ./spark/config:/opt/spark/conf:ro
+  spark-worker:
+    image: spark-image
+    entrypoint: ['./entrypoint.sh', 'worker']
+    depends_on:
+      - spark-master
+    deploy:
+      replicas: ${SPARK_WORKER_COUNT:-1}
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+    environment:
+      - SPARK_NO_DAEMONIZE=true
+    volumes:
+      - ./spark/config:/opt/spark/conf:ro
 
   # warehouse
   # db:
