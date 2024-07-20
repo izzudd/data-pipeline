@@ -1,73 +1,54 @@
+from pyspark.ml.feature import VectorAssembler, StandardScaler
+from pyspark.ml.feature import PCA
 from pyspark.sql import SparkSession
-import uuid
 
-spark = SparkSession.builder.appName('Preprocess').getOrCreate()
+spark = SparkSession.builder.appName('PCA').getOrCreate()
 
-df = spark.read.load('/raw-data')
+df = spark.read.load('/transformed-data')
 df = df.na.drop()
 
-filtered_data = df.filter(
-    (df.trip_distance > 0) &
-    (df.passenger_count > 0) &
-    (df.tpep_dropoff_datetime != df.tpep_pickup_datetime)
-)
+columns = [
+  'trip_distance',
+  'passenger_count',
+  'total_amount',
+  'fare_per_passenger',
+  'fare_per_distance',
+  'fare_per_duration',
+  'month',
+  'day',
+  'hour',
+  'duration',
+]
 
-divide_possible_zero = lambda a, b: (a / b) if b > 0 else 0
+vectorizer = VectorAssembler(inputCols=columns, outputCol='vector')
+vector = vectorizer.transform(df)
 
-# for info about data see https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page
-transform = lambda data: {
-    'id': str(uuid.uuid4()),
-    
-    # > vendor
-    'vendor__cmt': int(data['VendorID'] == 1),
-    'vendor__vf': int(data['VendorID'] == 2),    
-    # end vendor <
-    
-    'passenger_count': data['passenger_count'],
-    'trip_distance': data['trip_distance'],
-    
-    # > payment rate
-    'rate__standard_rate': int(data['RatecodeID'] == 1),
-    'rate__jfk': int(data['RatecodeID'] == 2),
-    'rate__newark': int(data['RatecodeID'] == 3),
-    'rate__now': int(data['RatecodeID'] == 4),
-    'rate__negotiated': int(data['RatecodeID'] == 5),
-    'rate__group': int(data['RatecodeID'] == 6),
-    # end payment rate <
-    
-    'store_and_fwd_flag': int(data['store_and_fwd_flag'] == 'Y'),
-    'pu_location': data['PULocationID'],
-    'do_location': data['DOLocationID'],
-    
-    # > patyment type
-    'payment_type__credit_card': int(data['payment_type'] == 1),
-    'payment_type__cash': int(data['payment_type'] == 2),
-    'payment_type__no_charge': int(data['payment_type'] == 3),
-    'payment_type__dispute': int(data['payment_type'] == 4),
-    'payment_type__unknown': int(data['payment_type'] == 5),
-    # end payment type <
-    
-    'fare_amount': data['fare_amount'],
-    'extra': data['extra'],
-    'mta_tax': data['mta_tax'],
-    'tip_amount': data['tip_amount'],
-    'tolls_amount': data['tolls_amount'],
-    'improvement_surcharge': data['improvement_surcharge'],
-    'total_amount': data['total_amount'],
-    'congestion_surcharge': data['congestion_surcharge'],
-    'airport_fee': data['Airport_fee'],
-    
-    # > infered features
-    'month': data['tpep_pickup_datetime'].month,
-    'day': data['tpep_pickup_datetime'].day,
-    'hour': data['tpep_pickup_datetime'].hour,
-    'duration': (data['tpep_dropoff_datetime'] - data['tpep_pickup_datetime']).total_seconds(),
-    'fare_per_passenger': divide_possible_zero(data['total_amount'], data['passenger_count']),
-    'fare_per_distance': divide_possible_zero(data['total_amount'], data['trip_distance']),
-    'fare_per_duration': divide_possible_zero(data['total_amount'], (data['tpep_dropoff_datetime'] - data['tpep_pickup_datetime']).total_seconds()),
-    # end infered features <
-}
+scaler = StandardScaler(inputCol="vector", 
+                        outputCol="scaled_features",
+                        withStd=True,
+                        withMean=True)
+scaled_feature = scaler.fit(vector).transform(vector)
 
-transformed_df = filtered_data.rdd.map(transform).toDF()
-transformed_df = transformed_df.na.drop()
-transformed_df.write.mode('overwrite').save('/transformed-data', format='parquet')
+pca = PCA(k=len(columns), inputCol="scaled_features", outputCol="features")
+model = pca.fit(scaled_feature)
+cum_variance = model.explainedVariance.cumsum()
+n_components = len(cum_variance[cum_variance < 0.9])
+
+pca = PCA(k=n_components, inputCol="scaled_features", outputCol="features")
+feature = pca.fit(scaled_feature).transform(scaled_feature)
+
+feature.select('id', 'features').write.mode('overwrite').save('/experiment/pca-data')
+
+import pandas as pd
+variance = pd.DataFrame({
+  'explained_variance': model.explainedVariance,
+  'cumulative_variance': cum_variance,
+  'n_components': list(range(1, len(columns)+1))
+})
+
+variance = spark.createDataFrame(variance)
+variance.write.mode('overwrite').save('/experiment/pca-variance')
+
+url = 'jdbc:postgresql://db:5432/postgres'
+properties = {"user": "user", "password": "password", "driver": "org.postgresql.Driver"}
+variance.write.jdbc(url=url, table='pca_variance', mode='overwrite', properties=properties)

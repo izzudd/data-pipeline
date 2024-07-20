@@ -1,4 +1,3 @@
-from pyspark.ml.feature import VectorAssembler, StandardScaler, PCA
 from pyspark.ml.clustering import KMeans
 from pyspark.sql import SparkSession
 from pyspark.ml.evaluation import ClusteringEvaluator 
@@ -9,44 +8,9 @@ K_END = int(sys.argv[2])
 
 spark = SparkSession.builder.appName('FindK').getOrCreate()
 
-df = spark.read.load('/transformed-data')
-df = df.na.drop()
-df = df.sample(0.001)
+df = spark.read.load('/experiment/pca-data')
+feature = df.sample(0.001)
 
-columns = [
-  # 'vendor__cmt',
-  # 'vendor__vf',
-  'trip_distance',
-  'passenger_count',
-  # 'payment_type__credit_card',
-  # 'payment_type__cash',
-  # 'payment_type__no_charge',
-  # 'payment_type__dispute',
-  # 'payment_type__unknown',
-  'total_amount',
-  'fare_per_passenger',
-  'fare_per_distance',
-  'fare_per_duration',
-  # 'month',
-  # 'day',
-  # 'hour',
-  'duration',
-]
-
-vectorizer = VectorAssembler(inputCols=columns, outputCol='vector')
-vector = vectorizer.transform(df)
-
-scaler = StandardScaler(inputCol="vector", 
-                        outputCol="scaled_features",
-                        withStd=True,
-                        withMean=True)
-scaled_feature = scaler.fit(vector).transform(vector)
-
-pca = PCA(k=2, inputCol="scaled_features", outputCol="features")
-feature = pca.fit(scaled_feature).transform(scaled_feature)
-
-silhouette_score=[] 
-  
 evaluator = ClusteringEvaluator(predictionCol='cluster', 
                                 featuresCol='features') 
 
@@ -63,10 +27,9 @@ for k in K:
   wcss.append(cost)
   silhouette_scores.append(silhouette_score)
 
-# create spark df with k and silhouette score
-result = spark.createDataFrame(zip(K, wcss, silhouette_scores), ['k', 'silhouette_score'])
+result = spark.createDataFrame(zip(K, wcss, silhouette_scores), ['k', 'wcss', 'silhouette_score'])
 result.write.mode('overwrite').save('/experiment/silhouette-score')
 
-# dump experiment results             
-feature.select('id', 'scaled_features').write.mode('overwrite').save('/experiment/scaled-features')
-feature.select('id', 'features').write.mode('overwrite').save('/experiment/pca-features')
+url = 'jdbc:postgresql://db:5432/postgres'
+properties = {"user": "user", "password": "password", "driver": "org.postgresql.Driver"}
+result.write.jdbc(url=url, table='elbow-score', mode='overwrite', properties=properties)
