@@ -2,8 +2,6 @@ BASE_URL="https://d37ci6vzurychx.cloudfront.net/trip-data/"
 
 DATASETS=(
     "yellow_tripdata_"
-    # "green_tripdata_"
-    # "fhv_tripdata_"
 )
 
 YEARS=("2023")
