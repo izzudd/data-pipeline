@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  spark-master:
+    build: .
+    image: spark-image
+    container_name: spark-master
+    entrypoint: ['./entrypoint.sh', 'master']
+    hostname: spark-master
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+    volumes:
+      - ./spark/config:/opt/spark/conf:ro
+      - ./spark/app:/root/app:ro
+    environment:
+      - SPARK_NO_DAEMONIZE=true
+    ports:
+      - 8082:8080
+      - 7077:7077
+      - 4040-4050:4040-4050
+      # - 2001:22
+
+  spark-worker:
+    image: spark-image
+    entrypoint: ['./entrypoint.sh', 'worker']
+    depends_on:
+      - spark-master
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+    environment:
+      - SPARK_NO_DAEMONIZE=true
+    volumes:
+      - ./spark/config:/opt/spark/conf:ro

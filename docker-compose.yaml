@@ -3,23 +3,6 @@ version: '3.8'
 name: de
 
 services:
-  # notebook
-  # zeppelin:
-  #   image: apache/zeppelin:0.11.1
-  #   container_name: zeppelin
-  #   depends_on:
-  #     - hadoop-master
-  #     - spark-master
-  #   ports:
-  #     - 8080:8080
-  #   environment:
-  #     - "SPARK_MASTER=spark://spark-master:7077"
-  #     - "SPARK_HOME=/zeppelin/spark"
-  #   volumes:
-  #     - ./data/zeppelin/notebook:/notebook
-  #     - ./data/zeppelin/conf:/zeppelin/conf
-  #     - ./data/spark:/zeppelin/spark
-
   # lake
   hadoop-master:
     build: ./hadoop
@@ -30,7 +13,6 @@ services:
     ports:
       - 8081:9870
       - 8088:8088
-      # - 2002:22
     depends_on:
       - hadoop-worker
     deploy:
@@ -52,7 +34,7 @@ services:
     image: hadoop-image
     entrypoint: ["./entrypoint.sh", "worker"]
     deploy:
-      replicas: 3
+      replicas: ${HDFS_REPLICATION:-1}
       resources:
         limits:
           cpus: '0.5'
@@ -79,7 +61,6 @@ services:
           cpus: '1'
           memory: 512M
     volumes:
-      # - ./data/spark:/opt/spark
       - ./spark/config:/opt/spark/conf:ro
       - ./spark/app:/root/app:ro
     environment:
@@ -88,7 +69,6 @@ services:
       - 8082:8080
       - 7077:7077
       - 4040-4050:4040-4050
-      # - 2001:22
 
   spark-worker:
     image: spark-image
@@ -107,22 +87,45 @@ services:
       - ./spark/config:/opt/spark/conf:ro
 
   # warehouse
-  # db:
-  #   image: postgres:alpine
-  #   shm_size: 128M
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 512M
-  #   environment:
-  #     POSTGRES_USER: user
-  #     POSTGRES_PASSWORD: password
-  #   volumes:
-  #     - ./data/postgres-data:/var/lib/postgresql/data
+  db:
+    image: postgres:alpine
+    shm_size: 128M
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: metabase
+    volumes:
+      - ./data/postgres-data:/var/lib/postgresql/data
+
+  # dashboard
+  metabase:
+    image: metabase/metabase
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    ports:
+      - 3000:3000
+    environment:
+      - MB_DB_TYPE=postgres
+      - MB_DB_DBNAME=metabase
+      - MB_DB_PORT=5432
+      - MB_DB_USER=user
+      - MB_DB_PASS=password
+      - MB_DB_HOST=db
+    volumes:
+      - metabase-data:/metabase-data
   
-  # adminer:
-  #   image: adminer:latest
-  #   depends_on:
-  #     - db
-  #   ports:
-  #     - 8080:8080
+  adminer:
+    image: adminer:latest
+    depends_on:
+      - db
+    ports:
+      - 3001:8080
+
+volumes:
+  metabase-data:
